@@ -4,3 +4,4 @@ motor
 PyJWT
 bcrypt
 dotenv
+certifi
