@@ -3,5 +3,4 @@ uvicorn
 motor
 PyJWT
 bcrypt
-dotenv
-certifi
+python-dotenv

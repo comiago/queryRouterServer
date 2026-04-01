@@ -1,4 +1,5 @@
 import os
+import ssl
 from fastapi import FastAPI, HTTPException, Depends, Header
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
@@ -7,29 +8,41 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-import certifi
 
-# 1. Carica le variabili dal file .env (se presente, altrimenti le prenderà da Render)
+# Carica le variabili dal file .env
 load_dotenv()
 
 app = FastAPI(title="QueryRouter Cloud Sync")
 
-# --- CONFIGURAZIONE E SICUREZZA ---
+# --- 1. CONFIGURAZIONE E SICUREZZA ---
 MONGO_URL = os.getenv("MONGO_URL")
 SECRET_KEY = os.getenv("SECRET_KEY")
+# Se non trova la variabile ENVIRONMENT, assume che sia su Render ("production")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production") 
 ALGORITHM = "HS256"
 
-# Controllo di sicurezza: ferma il server se mancano le chiavi
+# Controllo di sicurezza
 if not MONGO_URL or not SECRET_KEY:
     raise ValueError("⚠️ ATTENZIONE: Le variabili d'ambiente MONGO_URL o SECRET_KEY non sono impostate!")
 
-# Connessione a MongoDB
-client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where())
+# --- 2. CONNESSIONE INTELLIGENTE A MONGODB ---
+if ENVIRONMENT == "local":
+    print("⚠️ Avvio in modalità LOCALE: Bypass SSL di Windows attivo.")
+    # Patch per Windows: ignora i certificati locali
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    client = AsyncIOMotorClient(MONGO_URL, tls=True, tlsAllowInvalidCertificates=True)
+else:
+    print("✅ Avvio in modalità PRODUZIONE: Connessione sicura attiva.")
+    # Connessione standard (Render)
+    client = AsyncIOMotorClient(MONGO_URL)
+
 db = client.queryrouter_db  
 users_col = db.users        
 configs_col = db.configs    
 
-# --- MODELLI DATI ---
+# --- 3. MODELLI DATI ---
 class UserAuth(BaseModel):
     username: str
     password: str
@@ -37,7 +50,7 @@ class UserAuth(BaseModel):
 class ShortcutSync(BaseModel):
     config_data: Dict[str, Any]
 
-# --- FUNZIONI DI SUPPORTO (JWT) ---
+# --- 4. FUNZIONI DI SUPPORTO (JWT) ---
 def create_token(username: str):
     scadenza = datetime.utcnow() + timedelta(days=30)
     dati = {"user": username, "exp": scadenza}
@@ -53,7 +66,7 @@ async def get_current_user(authorization: str = Header(None)):
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Token non valido o scaduto")
 
-# --- ENDPOINTS (Le API del server) ---
+# --- 5. ENDPOINTS (Le API del server) ---
 
 @app.post("/register")
 async def register(user: UserAuth):
