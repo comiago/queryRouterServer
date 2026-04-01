@@ -3,3 +3,4 @@ uvicorn
 motor
 PyJWT
 bcrypt
+dotenv

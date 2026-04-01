@@ -7,6 +7,7 @@ import bcrypt
 import jwt
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import certifi
 
 # 1. Carica le variabili dal file .env (se presente, altrimenti le prenderà da Render)
 load_dotenv()
@@ -23,7 +24,7 @@ if not MONGO_URL or not SECRET_KEY:
     raise ValueError("⚠️ ATTENZIONE: Le variabili d'ambiente MONGO_URL o SECRET_KEY non sono impostate!")
 
 # Connessione a MongoDB
-client = AsyncIOMotorClient(MONGO_URL)
+client = AsyncIOMotorClient(MONGO_URL, tlsCAFile=certifi.where())
 db = client.queryrouter_db  
 users_col = db.users        
 configs_col = db.configs    
